@@ -10,7 +10,7 @@
 #include "clsPCA9555.h" // https://github.com/nicoverduin/PCA9555
 #include "machine.h"
 
-const uint8_t LONGER_UDP_PACKET_SIZE = 40; // currently the longest PGN is 30 (Section Dimension - 39 bytes), UDP_TX_PACKET_MAX_SIZE is only 24
+const uint8_t LONGER_UDP_PACKET_SIZE = 40; // currently the longest PGN is 39 (Section Dimension - 39 bytes), UDP_TX_PACKET_MAX_SIZE is only 24
 uint8_t pgnData[LONGER_UDP_PACKET_SIZE];   // Buffer For Receiving UDP Data
 
 // IP & MAC address of this module of this module
