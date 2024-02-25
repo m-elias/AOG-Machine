@@ -63,7 +63,7 @@ void setup() {
 
 void loop() {
   CheckPGNs();
-  machine.watchdogCheck();
+  machine.watchdogCheck();      // used to check if UDP comms (PGN updates) have failed and turn outputs OFF
 }
 
 
