@@ -1,6 +1,7 @@
+#include <stdint.h>
 /*
   My attempt at putting the Machine/Section control code all into a class
-    by Matt Elias 240219
+    by Matt Elias Feb 2024
 
   Supports control of regular Arduino pins as well as PCA9555 I2C port expanders as used on the AiO v5.0a Proto
     - two init() functions, one for Arduino pins and one for PCA9555/v5.0a control
@@ -17,7 +18,10 @@
 
 
 #include "EEPROM.h"
-#include "clsPCA9555.h"
+#include "elapsedMillis.h"
+#ifdef CLSPCA9555_H_
+  #include "clsPCA9555.h"
+#endif
 
 class MACHINE
 {
@@ -53,8 +57,10 @@ private:
   const uint8_t maxOutputPins = 24;               // 24 pins can be configured in AoG (Machine Pin Config PGN), 64 sections currently the max supported by AoG
   uint8_t* outputPinNumbers;                      // store Arduino output pin numbers
 
+#ifdef CLSPCA9555_H_
   PCA9555* pcaOutputs = NULL;
   uint8_t* pcaOutputPinNumbers;                  // the AiO v5.0a uses 8 PCA9555 IO for outputs
+#endif
 
   struct States {
     uint8_t uTurn;                // 
@@ -123,6 +129,7 @@ public:
     }
   }
 
+#ifdef CLSPCA9555_H_
   // init function for PCA9555 IO expander pins (AiO v5.0a)
   void init(PCA9555* _pcaOutputs, uint8_t* _outputPins, int16_t _eeAddr = -1, const uint8_t _eeSize = 33)
   {
@@ -138,12 +145,13 @@ public:
       pcaOutputs->digitalWrite(pcaOutputPinNumbers[i], config.isPinActiveHigh);      // PCA9555 outputs on AiO v5.0a are inverted from other test LEDs
     }
   }
+#endif
 
   void watchdogCheck()
   {
     if (watchdogTimer > watchdogTimeoutPeriod)    // watchdogTimer reset with Machine Data PGN, should be 64 Section instead or both?
     {
-      if (debugLevel > 0) Serial << "\r\n*** UDP Comms lost, setting all outputs OFF! ***";
+      if (debugLevel > 0) Serial.print("\r\n*** UDP Comms lost, setting all outputs OFF! ***");
       for (uint8_t i = 1; i <= 21; i++) {
         states.functions[i] = 0;            // set all functions OFF
       }
@@ -161,7 +169,6 @@ public:
   // updating outputs from PGN should be slightly quicker response then waiting for old update loop to trigger, at times the delay was almost 200ms
   void updateStates()
   {
-    //Serial << "\r\n" << millis() << " machine update " << _dIP << ":" << _dPort;
     static uint8_t lastTrigger;          // "static" means this var is accessible only to this function but its value persists (it's not destroyed)
     static uint8_t raiseTimer = 0;
     static uint8_t lowerTimer = 0;
@@ -269,20 +276,22 @@ public:
       //if (debugLevel > 3) Serial.print("\r\nPin outputs ");
       for (uint8_t i = 1; i <= numOutputPins; i++) {
         digitalWrite(outputPinNumbers[i - 1], states.functions[config.pinFunction[i]] == config.isPinActiveHigh);                     // ==, XOR
-        //if (debugLevel > 3) Serial << i << ":" << (states.functions[config.pinFunction[i]] == config.isPinActiveHigh) << " ";
+        //if (debugLevel > 3) Serial.print(i); Serial.print(":"); Serial.print(states.functions[config.pinFunction[i]] == config.isPinActiveHigh); Serial.print(" ");
       }
     }
 
+#ifdef CLSPCA9555_H_
     if (pcaOutputs != NULL)
     {
       //if (debugLevel > 3) Serial.print("\r\nPCA outputs ");
       for (uint8_t i = 1; i <= 8; i++) {       // AiO v5.0a has 8 PCA9555 outputs
         if (config.pinFunction[i] > 0) {
           pcaOutputs->digitalWrite(pcaOutputPinNumbers[i - 1], !(states.functions[config.pinFunction[i]] == config.isPinActiveHigh));   // NXOR
-          //if (debugLevel > 3) Serial << i << ":" << !(states.functions[config.pinFunction[i]] == config.isPinActiveHigh) << " ";
+          //if (debugLevel > 3) Serial.print(i); Serial.print(":"); Serial.print(!(states.functions[config.pinFunction[i]] == config.isPinActiveHigh)); Serial.print(" ");
         }
       }
     }
+#endif
     /*Serial.println();
     for (byte i = 0; i < 24; i++){
       Serial.printf("%2i ", config.pinFunction[i]);
@@ -309,15 +318,15 @@ public:
     if (pgnData[0] != 0x80 || pgnData[1] != 0x81 || pgnData[2] != 0x7F) return false;    // skip the rest if the first three bytes are NOT AoG headers
 
 
-    if (pgnData[3] == 229 && len == 16)                    // 0xE5 (229) - 64 Section Data
+    if (pgnData[3] == 229 && len == 16)                    // 0xE5 (229) - 64 Section Data, len: 16
     {                                                      // use this instead of relayLo/Hi from other PGNs because it works for zones/groups too
       
-      if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - "); }
+      if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
       if (debugLevel > 3) Serial.print("64 Section Data");
 
       if (debugLevel > 3) Serial.println();
       for (uint8_t j = 0; j < 8; j++) {
-        if (debugLevel > 3) Serial << j + 1 << ":";
+        if (debugLevel > 3){ Serial.print(j + 1); Serial.print(":"); }
         for (uint8_t i = 0; i < 8; i++) {
           states.sections[1 + i + j * 8] = bitRead(pgnData[5 + j], i);
           if (debugLevel > 3) Serial.print(states.sections[i + j * 8]);
@@ -331,9 +340,9 @@ public:
     }
 
 
-    else if (pgnData[3] == 235 && len == 39)               // 0xEB (235) - Section Dimensions
+    else if (pgnData[3] == 235 && len == 39)               // 0xEB (235) - Section Dimensions, len: 39
     {
-      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - "); }
+      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
       if (debugLevel > 2) Serial.print("Section Dimensions");
       
       // parse section dims here
@@ -343,9 +352,9 @@ public:
     }
 
 
-    else if (pgnData[3] == 236 && len == 30)               // 0xEC (236) - Machine Pin Config
+    else if (pgnData[3] == 236 && len == 30)               // 0xEC (236) - Machine Pin Config, len: 30
     {
-      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - "); }
+      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
       if (debugLevel > 2) Serial.print("Machine Pin Config");
       for (uint8_t i = 5; i < min(len - 1, uint8_t(sizeof(config.pinFunction) + 5)); i++) {
         config.pinFunction[i - 4] = pgnData[i];
@@ -358,9 +367,9 @@ public:
     }
 
 
-    else if (pgnData[3] == 238 && len == 14)                // 0xEE (238) - Machine Config
+    else if (pgnData[3] == 238 && len == 14)                // 0xEE (238) - Machine Config, len: 14
     {
-      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - "); }
+      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
       if (debugLevel > 2) Serial.print("Machine Config");
       config.raiseTime = pgnData[5];
       config.lowerTime = pgnData[6];
@@ -387,9 +396,9 @@ public:
     }
 
 
-    else if (pgnData[3] == 239 && len == 14)                // 0xEF (239) - Machine Data
+    else if (pgnData[3] == 239 && len == 14)                // 0xEF (239) - Machine Data, len: 14
     {
-      if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - "); }
+      if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
       if (debugLevel > 3) Serial.print("Machine Data");
       
       states.uTurn = pgnData[5];
@@ -406,19 +415,19 @@ public:
       //relayHi = pgnData[12];
 
       if (debugLevel > 4) {
-        Serial << "\r\nuTurn: " << states.uTurn;
-        Serial << "\r\ngpsSpeed: " << pgnData[6] << " > " << states.gpsSpeed;
-        Serial << "\r\nhydLift(1:D 2:U): " << states.hydLift << (states.hydLift == 1 ? ":DOWN" : states.hydLift == 2 ? ":UP" : ":OFF");
-        Serial << "\r\ntramline(1:R 2:L): " << states.tramline << (states.tramline == 1 ? ":RIGHT" : states.tramline == 2 ? ":LEFT" : ":OFF");
-        Serial << "\r\ngeoStop(0:OK 1:STOP): " << states.geoStop << (states.geoStop == 1 ? ":STOP!!!" : ":GOOD");
-        Serial.print("\r\nsec 1-8: "); printBinary(pgnData[11]);// Serial.print(" "); Serial.print(relayLo,BIN);
-        Serial.print(" sec 9-16: "); printBinary(pgnData[12]);// Serial.print(" "); Serial.print(relayHi,BIN);
+        Serial.print("\r\nuTurn: "); Serial.print(states.uTurn);
+        Serial.print("\r\ngpsSpeed: "); Serial.print(pgnData[6]); Serial.print(" > "); Serial.print(states.gpsSpeed);
+        Serial.print("\r\nhydLift(1:D 2:U): "); Serial.print(states.hydLift); Serial.print((states.hydLift == 1 ? ":DOWN" : states.hydLift == 2 ? ":UP" : ":OFF"));
+        Serial.print("\r\ntramline(1:R 2:L): "); Serial.print(states.tramline); Serial.print((states.tramline == 1 ? ":RIGHT" : states.tramline == 2 ? ":LEFT" : ":OFF"));
+        Serial.print("\r\ngeoStop(0:OK 1:STOP): "); Serial.print(states.geoStop); Serial.print((states.geoStop == 1 ? ":STOP!!!" : ":GOOD"));
+        Serial.print("\r\nsec 1-8: "); printBinaryByteLSB(pgnData[11], 8);
+        Serial.print(" sec 9-16: "); printBinaryByteLSB(pgnData[12], 8);
       } else if (debugLevel > 3) {
-        Serial.print("\r\n0:"); printBinary(pgnData[11]);
-        Serial.print(" 1:"); printBinary(pgnData[12]);
+        Serial.print("\r\n0:"); printBinaryByteLSB(pgnData[11], 8);
+        Serial.print(" 1:"); printBinaryByteLSB(pgnData[12], 8);
       }
 
-      //updateStates();   // 64 Section PGN comes after Machine Data, so pin are updated there
+      //updateStates();   // 64 Section PGN comes after Machine Data, so states/outputs are updated there
       if (debugLevel > 3) Serial.println();
       return true;
     }
@@ -465,14 +474,14 @@ public:
   void printConfig()
   {
     if (debugLevel > 1) {
-      Serial << "\r\n- raiseTime: " << config.raiseTime;
-      Serial << "\r\n- lowerTime: " << config.lowerTime;
-      Serial << "\r\n- relayActiveHigh: " << config.isPinActiveHigh;
-      Serial << "\r\n- hydLiftEnable: " << config.hydLiftEnable;
-      Serial << "\r\n- user1: " << config.user1;
-      Serial << "\r\n- user2: " << config.user2;
-      Serial << "\r\n- user3: " << config.user3;
-      Serial << "\r\n- user4: " << config.user4;
+      Serial.print("\r\n- raiseTime: "); Serial.print(config.raiseTime);
+      Serial.print("\r\n- lowerTime: "); Serial.print(config.lowerTime);
+      Serial.print("\r\n- relayActiveHigh: "); Serial.print(config.isPinActiveHigh);
+      Serial.print("\r\n- hydLiftEnable: "); Serial.print(config.hydLiftEnable);
+      Serial.print("\r\n- user1: "); Serial.print(config.user1);
+      Serial.print("\r\n- user2: "); Serial.print(config.user2);
+      Serial.print("\r\n- user3: "); Serial.print(config.user3);
+      Serial.print("\r\n- user4: "); Serial.print(config.user4);
     }
   }
 
@@ -480,15 +489,21 @@ public:
   {
     if (debugLevel > 1) {
       for (uint8_t i = 1; i < uint8_t(sizeof(config.pinFunction)); i++) {
-        Serial << "\r\n- Pin " << (i < 10 ? " " : "") << i << ": " << (config.pinFunction[i] < 10 ? " " : "") << config.pinFunction[i] << " " << functionNames[config.pinFunction[i]];
+        Serial.print("\r\n- Pin ");
+        Serial.print((i < 10 ? " " : ""));
+        Serial.print(i); Serial.print(": ");
+        Serial.print((config.pinFunction[i] < 10 ? " " : ""));
+        Serial.print(config.pinFunction[i]);
+        Serial.print(" ");
+        Serial.print(functionNames[config.pinFunction[i]]);
       }
     }
   }
 
   
 
-  void printBinary(uint8_t var) {
-    for (uint8_t bit = 0; bit < 8; bit++){
+  void printBinaryByteLSB(uint8_t var, uint8_t len) {
+    for (uint8_t bit = 0; bit < len; bit++){
       Serial.print(bitRead(var, bit));
     }
   }

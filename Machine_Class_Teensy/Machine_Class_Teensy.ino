@@ -2,7 +2,6 @@
    Attempt to create classes and put more code into functions for readability
 */
 
-#include <Streaming.h>
 #include <EEPROM.h>
 #include <NativeEthernet.h>
 #include <NativeEthernetUdp.h>
@@ -38,17 +37,17 @@ uint8_t pcaOutputPinNumbers[8] = { 1, 0, 12, 15, 9, 8, 6, 7 };   // all 8 PCA955
 void setup() {
   Serial.begin(115200);
   delay(10);
-  Serial << "\r\n************************************************\nStart setup\n\n";
+  Serial.print("\r\n\n************************************************\nStart setup\n\n");
 
   delay(500);                         //Small delay so serial can monitor start up
   //set_arm_clock(150000000);           //Set CPU speed to 150mhz
-  Serial << "CPU speed set to: " << F_CPU_ACTUAL;
+  Serial.print("CPU speed set to: "); Serial.print(F_CPU_ACTUAL);
 
-  Serial << "\r\nStarting Ethernet...";
+  Serial.print("\r\nStarting Ethernet...");
   EthernetStart();
 
   if (pcaOutputs.begin()) {
-    Serial << "\nSection outputs (PCA9555) detected (8 channels, low side switching)";
+    Serial.print("\r\nSection outputs (PCA9555) detected (8 channels, low side switching)");
     machine.init(&pcaOutputs, pcaOutputPinNumbers, 100);   // for PCA9555, AiO v5.0a FET output control (low side)
   }
   
@@ -56,7 +55,7 @@ void setup() {
   machine.init(arduinoOutputPinNumbers, sizeof(arduinoOutputPinNumbers), 100);
 
 
-  Serial << "\r\nEnd setup\r\n";
+  Serial.print("\r\nEnd setup\r\n");
 }
 
 
@@ -70,20 +69,19 @@ void loop() {
 
 void CheckPGNs()
 {
-  //Serial << "\r\nchecking UDP";
   if (!Ethernet_running) {    // When ethernet is not running, return directly. parsePacket() will block when we don't
-    Serial << "***Ethernet NOT running***";
+    Serial.print("***Ethernet NOT running***");
     return;
   }
 
   uint16_t len = Eth_PGNs.parsePacket();
-  if (len < 5) return;      // Check for len > 4, because we check byte 0, 1, 2 and 3
+  if (len < 5) return;      // len needs to be > 4, because we check byte 0, 1, 2 and 3 for PGN numbers (+data bytes too)
 
   Eth_PGNs.read(pgnData, LONGER_UDP_PACKET_SIZE);
 
-  if (pgnData[0] != 0x80 && pgnData[1] != 0x81 && pgnData[2] != 0x7F) return;      // verify the first three bytes are AoG headers
+  if (pgnData[0] != 0x80 && pgnData[1] != 0x81 && pgnData[2] != 0x7F) return;      // verify the first three bytes are AoG PGN headers
   
-  if (pgnData[3] == 0xFE)// && Autosteer_running)  // 0xFE (254) - Steer Data
+  if (pgnData[3] == 0xFE)               // 0xFE (254) - Steer Data
   {
     /*Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - ");
     //Serial.print("Steer Data");
@@ -92,15 +90,16 @@ void CheckPGNs()
     Serial.println();*/
   }
 
-  else if (pgnData[3] == 0xFC)// && Autosteer_running)  // 0xFC (252) - Steer Settings
+  else if (pgnData[3] == 0xFC)           // 0xFC (252) - Steer Settings
   {
-    Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - ");
+    Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - ");
     Serial.print("Steer Settings");
   }
 
-  else if (pgnData[3] == 0xC8) // 0xC8 (200) - Hello from AgIO
+
+  else if (pgnData[3] == 0xC8)          // 0xC8 (200) - Hello From AgIO
   {
-    //Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - ");
+    //Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - ");
     //Serial.print("Hello from AgIO");
 
     if (myip[3] == 126) // this is the steer module IP, reply as steer module
@@ -117,21 +116,13 @@ void CheckPGNs()
       SendUdp(helloFromAutoSteer, sizeof(helloFromAutoSteer), Eth_ipDestination, portDestination);
       */
     }
-    
     else if (myip[3] == 123) // this is the machine module IP, reply as machine module
     {
-      /*if (udpData[7] == 1)  // not sure what this does if it's even implemented/used
-      {
-          relayLo -= 255;
-          relayHi -= 255;
-          watchdogTimer = 0;
-      }*/
       uint8_t relayLo = 0;
       uint8_t relayHi = 0;
       uint8_t helloFromMachine[] = { 128, 129, 123, 123, 5, relayLo, relayHi, 0, 0, 0, 71 };
       SendUdp(helloFromMachine, sizeof(helloFromMachine), PGN_BROADCAST_IP, DEST_PORT);
     }
-    
     else if (myip[3] == 121) // this is the IMU module IP, reply as IMU module
     {
       // should also reply even if other module but IMU is read by it
@@ -139,24 +130,43 @@ void CheckPGNs()
         SendUdp(helloFromIMU, sizeof(helloFromIMU), Eth_ipDestination, portDestination); 
       */
     }
-    
     else if (myip[3] == 120) // this is the GPS module IP, reply as GPS module
     {
-      
+      // sending GPS data (GGA, PANDA, PAGOI etc) also sets GPS green in AgIO
     }
-    
     else
     {
-      Serial << "\r\nUnknown module IP: " << myip[3] << ", no reply sent to AgIO";
+      Serial.print("\r\nUnknown module IP: ");
+      Serial.print(myip[3]);
+      Serial.print(", no reply sent to AgIO");
     }
+  }     // end of Hello From AgIO
 
+
+  else if (pgnData[3] == 201)            // 0xC9 (201) - Subnet Change
+  {
+    Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - ");
+    Serial.print("Subnet Change");
+    if (pgnData[4] == 5 && pgnData[5] == 201 && pgnData[6] == 201)        // make really sure this is the subnet pgn
+    {
+      myip[0] = pgnData[7];
+      myip[1] = pgnData[8];
+      myip[2] = pgnData[9];
+      Ethernet.setLocalIP(myip);  // Change IP address to IP set by PGN
+
+      //EEPROM.put(5, networkAddress); // eeprom not implement in this example
+      //delay(100);               // delay for serial/etc to finish
+      //SCB_AIRCR = 0x05FA0004;   // Teensy Reboot, not necessary
+
+    }
   }
 
 
-  else if (pgnData[3] == 202)  // 0xCA (202) - Scan Request
+  else if (pgnData[3] == 202)            // 0xCA (202) - Scan Request
   {
-    Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print((String)" (" + pgnData[3] + ") - ");
+    Serial.print("\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - ");
     Serial.print("Scan Request");
+
     if (pgnData[4] == 3 && pgnData[5] == 202 && pgnData[6] == 202) {
       IPAddress rem_ip = Eth_PGNs.remoteIP();
 
@@ -181,14 +191,18 @@ void CheckPGNs()
               udpData[3] == 229 ){  // 0xE5 (229) - 64 Section Data*/
   else if (machine.parsePGN(pgnData, len))    // if no PGN matches yet, look for Machine PGNs
   {
-    //Serial << "\nChecking machine PGNs";
+    //Serial.print("\r\nFound Machine/Section PGN");
   }
 
 
-  // catch & alert to all other eth data
-  else
+  else    // catch & alert to all other PGN data
   {
-    Serial << "\r\n0x"; Serial.print(pgnData[3], HEX); Serial << "(" << pgnData[3] << ") - Unknown PGN data, len: " << len;
+    Serial.print("\r\n0x");
+    Serial.print(pgnData[3], HEX);
+    Serial.print("(");
+    Serial.print(pgnData[3]);
+    Serial.print(") - Unknown PGN data, len: ");
+    Serial.print(len);
   }
 }
 
