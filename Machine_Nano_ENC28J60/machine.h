@@ -16,6 +16,8 @@
     - maybe split up machine functions and sections into seperate classes or seperate output groups
 */
 
+#ifndef MACHINE_H
+#define MACHINE_H
 
 #include "EEPROM.h"
 #include "elapsedMillis.h"
@@ -56,6 +58,7 @@ private:
   uint8_t numOutputPins = 0;                      // 0 defaults to no direct Arduino pin control
   const uint8_t maxOutputPins = 24;               // 24 pins can be configured in AoG (Machine Pin Config PGN), 64 sections currently the max supported by AoG
   uint8_t* outputPinNumbers;                      // store Arduino output pin numbers
+  bool forceOutputUpdate;
 
 #ifdef CLSPCA9555_H_
   PCA9555* pcaOutputs = NULL;
@@ -80,6 +83,7 @@ private:
   const uint8_t LOOP_TIME = 200;                  // 5hz
   const uint16_t watchdogTimeoutPeriod = 4000;    // ms, originally was 20 update cycles (4 secs)
   const uint16_t watchdogAlertPeriod = 1000;      // ms, how long after UDP comms lost to alert
+  bool watchdogAlertTriggered;
 
   const String functionNames[1 + 21] = { "",
       "S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08",
@@ -88,6 +92,8 @@ private:
   };
 
 public:
+
+  bool isInit;
 
   uint8_t debugLevel = 3;
     // 0 - debug prints OFF
@@ -127,6 +133,7 @@ public:
       pinMode(outputPinNumbers[i], OUTPUT);
       digitalWrite(outputPinNumbers[i], !config.isPinActiveHigh);
     }
+    isInit = true;
   }
 
 #ifdef CLSPCA9555_H_
@@ -144,6 +151,7 @@ public:
       //pcaOutputs->pinMode(pcaOutputPinNumbers[i], OUTPUT);                         // calling digitalWrite already sets the pins to OUTPUT
       pcaOutputs->digitalWrite(pcaOutputPinNumbers[i], config.isPinActiveHigh);      // PCA9555 outputs on AiO v5.0a are inverted from other test LEDs
     }
+    isInit = true;
   }
 #endif
 
@@ -151,7 +159,7 @@ public:
   {
     if (watchdogTimer > watchdogTimeoutPeriod)    // watchdogTimer reset with Machine Data PGN, should be 64 Section instead or both?
     {
-      if (debugLevel > 0) Serial.print("\r\n*** UDP Comms lost, setting all outputs OFF! ***");
+      if (debugLevel > 0) Serial.print("\r\n*** UDP Machine Comms lost for 4s, setting all outputs OFF! ***");
       for (uint8_t i = 1; i <= 21; i++) {
         states.functions[i] = 0;            // set all functions OFF
       }
@@ -161,7 +169,10 @@ public:
     }
     else if (watchdogTimer > watchdogAlertPeriod)
     {
-      // alert that comms are lost but keep sections on a bit longer
+      if (debugLevel > 0 && !watchdogAlertTriggered) {
+        Serial.print("\r\n** UDP Machine Comms lost for 1s **");
+        watchdogAlertTriggered = true;
+      }
     }
   }
 
@@ -240,11 +251,14 @@ public:
     //GeoStop
     states.functions[21] = states.geoStop;
 
-    if (memcmp(states.functions, prevFunctions, sizeof(states.functions))) {
+    if (forceOutputUpdate || memcmp(states.functions, prevFunctions, sizeof(states.functions))) {
       //Serial.print("\r\nOutputs updated");
       updateOutputPins();
     }
 
+    if (debugLevel > 0 && watchdogTimer > watchdogAlertPeriod) {
+      Serial.print("\r\n*** UDP Machine Comms resumed ***");
+    }
     watchdogTimer = 0;   //reset watchdog timer
 
     // *** Sending PGN_237 isn't necessary/doesn't do anything?
@@ -306,6 +320,7 @@ public:
     }*/
     //Serial << "\r\noutput update delay: " << updateDelayTimer;
     //if (config.pinFunction[0]) digitalWrite(4, states.functions[config.pinFunction[0]]);
+    forceOutputUpdate = false;
   }
 
   // ***************************************************************************************************************************************************
@@ -329,7 +344,7 @@ public:
         if (debugLevel > 3){ Serial.print(j + 1); Serial.print(":"); }
         for (uint8_t i = 0; i < 8; i++) {
           states.sections[1 + i + j * 8] = bitRead(pgnData[5 + j], i);
-          if (debugLevel > 3) Serial.print(states.sections[i + j * 8]);
+          if (debugLevel > 3) Serial.print(states.sections[1 + i + j * 8]);
         }
         if (debugLevel > 3) Serial.print(" ");
       }
@@ -361,6 +376,7 @@ public:
       }
       if (debugLevel > 2) printPinConfig();
       saveToEeprom();
+      forceOutputUpdate = true;
 
       if (debugLevel > 2) Serial.println();
       return true;
@@ -389,6 +405,7 @@ public:
       //Serial << "\r\n- set0: " << set0 << " " << (bitRead(set0, 3) ? 1 : 0) << (bitRead(set0, 2) ? 1 : 0) << (bitRead(set0, 1) ? 1 : 0) << (bitRead(set0, 0) ? 1 : 0);
       if (debugLevel > 2) printConfig();
       saveToEeprom();
+      forceOutputUpdate = true;
       //rebootFunc();    // from old code, is there any reason to reboot?
 
       if (debugLevel > 2) Serial.println();
@@ -520,3 +537,4 @@ public:
 
 
 };
+#endif
