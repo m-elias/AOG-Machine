@@ -11,9 +11,12 @@ An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/re
 ### Source & Examples
 See the machine.h file in the two example sketches for Teensy 4.1 (Eth) and Nano (enc28j60) implementation.
 
+The Teensy example includes code for using PCA9555 (I2C expander) outputs.
+
 ### To do:
 - ESP32 example
 - init() function for section only control
+- customizable number of PCA9555 outputs
 
 ### AgOpenGPS Machine Configuration
 Use the Machine settings in AgOpenGPS to set the machine config settings.
