@@ -6,6 +6,8 @@ An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/re
 
 [AOG Forum](https://discourse.agopengps.com/)
 
+[AOG YouTube](https://youtube.com/@AgOpenGPS)
+
 ### Source & Examples
 See the machine.h file in the two example sketches for Teensy 4.1 (Eth) and Nano (enc28j60) implementation.
 
