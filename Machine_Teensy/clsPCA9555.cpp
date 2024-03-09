@@ -1,5 +1,3 @@
-#include "core_pins.h"
-#include <stdint.h>
 /**
     Modified for AiO v5.0a PCA9555 8ch section/machine outputs
       Matt Elias 240219
@@ -44,6 +42,8 @@
 #include "WProgram.h"
 #endif
 
+#include "core_pins.h"
+#include <stdint.h>
 #include "clsPCA9555.h"
 #include <Wire.h>
 
