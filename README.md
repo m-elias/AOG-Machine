@@ -17,6 +17,7 @@ The Teensy example includes code for using PCA9555 (I2C expander) outputs.
 - ESP32 example
 - init() function for section only control
 - customizable number of PCA9555 outputs
+- Add section "switch" control PGN
 
 ### AgOpenGPS Machine Configuration
 Use the Machine settings in AgOpenGPS to set the machine config settings.
