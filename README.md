@@ -4,12 +4,7 @@
 [AOG YouTube](https://youtube.com/@AgOpenGPS)
 
 ## UDP Machine class
-
 An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/releases) Machine/Section control related code into an Arduino class/library for UDP communications.
-
-[AOG Forum](https://discourse.agopengps.com/)
-
-[AOG YouTube](https://youtube.com/@AgOpenGPS)
 
 ### Source & Examples
 See the machine.h file in the two example sketches for Teensy 4.1 (Eth) and Nano (enc28j60) implementation.
