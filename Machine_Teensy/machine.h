@@ -14,12 +14,17 @@
     - add section switch code, maybe in it's own class?
     - add GPS speed output options/code
     - maybe split up machine functions and sections into seperate classes or seperate output groups
+    - support 64 section only init/functions (no other machine controls)
+    - split Arduino pin inversion from PCA pin inversion or add setting to either match or invert PCA from Arduino pins
+    
 */
 
 #ifndef MACHINE_H
 #define MACHINE_H
 
 #include "EEPROM.h"
+#include "IPAddress.h"
+#include <stdint.h>
 #include "elapsedMillis.h"
 #ifdef CLSPCA9555_H_
   #include "clsPCA9555.h"
@@ -79,7 +84,6 @@ private:
     bool sections[1 + 64];
   }; States states;
 
-  elapsedMillis watchdogTimer;
   const uint8_t LOOP_TIME = 200;                  // 5hz
   const uint16_t watchdogTimeoutPeriod = 4000;    // ms, originally was 20 update cycles (4 secs)
   const uint16_t watchdogAlertPeriod = 1000;      // ms, how long after UDP comms lost to alert
@@ -94,6 +98,7 @@ private:
 public:
 
   bool isInit;
+  elapsedMillis watchdogTimer;
 
   uint8_t debugLevel = 3;
     // 0 - debug prints OFF
@@ -157,6 +162,8 @@ public:
 
   void watchdogCheck()
   {
+    if (!isInit) return;
+
     if (watchdogTimer > watchdogTimeoutPeriod)    // watchdogTimer reset with Machine Data PGN, should be 64 Section instead or both?
     {
       if (debugLevel > 0) Serial.print("\r\n*** UDP Machine Comms lost for 4s, setting all outputs OFF! ***");
@@ -256,10 +263,11 @@ public:
       updateOutputPins();
     }
 
-    if (debugLevel > 0 && watchdogTimer > watchdogAlertPeriod) {
+    if (debugLevel > 0 && watchdogAlertTriggered) { //watchdogTimer > watchdogAlertPeriod) {
       Serial.print("\r\n*** UDP Machine Comms resumed ***");
     }
     watchdogTimer = 0;   //reset watchdog timer
+    watchdogAlertTriggered = false;
 
     // *** Sending PGN_237 isn't necessary/doesn't do anything?
 
@@ -297,11 +305,11 @@ public:
 #ifdef CLSPCA9555_H_
     if (pcaOutputs != NULL)
     {
-      //if (debugLevel > 3) Serial.print("\r\nPCA outputs ");
+      Serial.print("\r\nPCA outputs ");
       for (uint8_t i = 1; i <= 8; i++) {       // AiO v5.0a has 8 PCA9555 outputs
         if (config.pinFunction[i] > 0) {
           pcaOutputs->digitalWrite(pcaOutputPinNumbers[i - 1], !(states.functions[config.pinFunction[i]] == config.isPinActiveHigh));   // NXOR
-          //if (debugLevel > 3) Serial.print(i); Serial.print(":"); Serial.print(!(states.functions[config.pinFunction[i]] == config.isPinActiveHigh)); Serial.print(" ");
+          Serial.print(i); Serial.print(":"); Serial.print(!(states.functions[config.pinFunction[i]] == config.isPinActiveHigh)); Serial.print(" ");
         }
       }
     }
@@ -490,30 +498,26 @@ public:
 
   void printConfig()
   {
-    if (debugLevel > 1) {
-      Serial.print("\r\n- raiseTime: "); Serial.print(config.raiseTime);
-      Serial.print("\r\n- lowerTime: "); Serial.print(config.lowerTime);
-      Serial.print("\r\n- relayActiveHigh: "); Serial.print(config.isPinActiveHigh);
-      Serial.print("\r\n- hydLiftEnable: "); Serial.print(config.hydLiftEnable);
-      Serial.print("\r\n- user1: "); Serial.print(config.user1);
-      Serial.print("\r\n- user2: "); Serial.print(config.user2);
-      Serial.print("\r\n- user3: "); Serial.print(config.user3);
-      Serial.print("\r\n- user4: "); Serial.print(config.user4);
-    }
+    Serial.print("\r\n- raiseTime: "); Serial.print(config.raiseTime);
+    Serial.print("\r\n- lowerTime: "); Serial.print(config.lowerTime);
+    Serial.print("\r\n- relayActiveHigh: "); Serial.print(config.isPinActiveHigh);
+    Serial.print("\r\n- hydLiftEnable: "); Serial.print(config.hydLiftEnable);
+    Serial.print("\r\n- user1: "); Serial.print(config.user1);
+    Serial.print("\r\n- user2: "); Serial.print(config.user2);
+    Serial.print("\r\n- user3: "); Serial.print(config.user3);
+    Serial.print("\r\n- user4: "); Serial.print(config.user4);
   }
 
   void printPinConfig()
   {
-    if (debugLevel > 1) {
-      for (uint8_t i = 1; i < uint8_t(sizeof(config.pinFunction)); i++) {
-        Serial.print("\r\n- Pin ");
-        Serial.print((i < 10 ? " " : ""));
-        Serial.print(i); Serial.print(": ");
-        Serial.print((config.pinFunction[i] < 10 ? " " : ""));
-        Serial.print(config.pinFunction[i]);
-        Serial.print(" ");
-        Serial.print(functionNames[config.pinFunction[i]]);
-      }
+    for (uint8_t i = 1; i < uint8_t(sizeof(config.pinFunction)); i++) {
+      Serial.print("\r\n- Pin ");
+      Serial.print((i < 10 ? " " : ""));
+      Serial.print(i); Serial.print(": ");
+      Serial.print((config.pinFunction[i] < 10 ? " " : ""));
+      Serial.print(config.pinFunction[i]);
+      Serial.print(" ");
+      Serial.print(functionNames[config.pinFunction[i]]);
     }
   }
 
