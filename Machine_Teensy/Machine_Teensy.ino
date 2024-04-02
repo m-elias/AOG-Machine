@@ -170,25 +170,47 @@ void CheckPGNs()
     if (pgnData[4] == 3 && pgnData[5] == 202 && pgnData[6] == 202) {
       IPAddress rem_ip = Eth_PGNs.remoteIP();
 
-      uint8_t scanReplyMachine[] = { 128, 129, 123, 203, 7,
-                              myip[0], myip[1], myip[2], myip[3],
-                              rem_ip[0], rem_ip[1], rem_ip[2], 23 };
-      //checksum
-      uint8_t CK_A = 0;
-      for (uint8_t i = 2; i < sizeof(scanReplyMachine) - 1; i++) {
-        CK_A = (CK_A + scanReplyMachine[i]);
-      }
-      scanReplyMachine[sizeof(scanReplyMachine) - 1] = CK_A;
-      SendUdp(scanReplyMachine, sizeof(scanReplyMachine), PGN_BROADCAST_IP, DEST_PORT);
+      #ifdef MACHINE_H
+        uint8_t scanReplyMachine[] = { 128, 129, 123, 203, 7,
+                                myip[0], myip[1], myip[2], myip[3],
+                                rem_ip[0], rem_ip[1], rem_ip[2], 23 };
+        //checksum
+        uint8_t CK_A = 0;
+        for (uint8_t i = 2; i < sizeof(scanReplyMachine) - 1; i++) {
+          CK_A = (CK_A + scanReplyMachine[i]);
+        }
+        scanReplyMachine[sizeof(scanReplyMachine) - 1] = CK_A;
+        SendUdp(scanReplyMachine, sizeof(scanReplyMachine), PGN_BROADCAST_IP, DEST_PORT);
+      #endif
     }
   }  // 0xCA (202) - Scan Request
 
 
-  /*else if ( udpData[3] == 235 ||  // 0xEB (235) - Section Dimensions
-              udpData[3] == 236 ||  // 0xEC (236) - Machine Pin Config
-              udpData[3] == 238 ||  // 0xEE (238) - Machine Config
-              udpData[3] == 239 ||  // 0xEF (239) - Machine Data
-              udpData[3] == 229 ){  // 0xE5 (229) - 64 Section Data*/
+  else if (pgnData[3] == 100)           // 0x64 (100) - Corrected Position
+  {
+    /*
+    union {           // both variables in the union share the same memory space
+      byte array[8];  // fill "array" from an 8 byte array converted in AOG from the "double" precision number we wanted to send
+      double number;  // and the double "number" has the original "double" precision number from AOG
+    } lat, lon;
+
+    for (byte i = 0; i < 8; i++)
+    {
+      lon.array[i] = pgnData[i+5];
+      lat.array[i] = pgnData[i+13];
+    }*/
+    /*Serial.print("\r\n");
+    Serial.print(lat.number, 13);
+    Serial.print(" ");
+    Serial.print(lon.number, 13);*/
+
+  }
+
+  /*else if ( pgnData[3] == 235 ||  // 0xEB (235) - Section Dimensions
+              pgnData[3] == 236 ||  // 0xEC (236) - Machine Pin Config
+              pgnData[3] == 238 ||  // 0xEE (238) - Machine Config
+              pgnData[3] == 239 ||  // 0xEF (239) - Machine Data
+              pgnData[3] == 229 ){  // 0xE5 (229) - 64 Section Data*/
   else if (machine.parsePGN(pgnData, len))    // if no PGN matches yet, look for Machine PGNs
   {
     //Serial.print("\r\nFound Machine/Section PGN");
