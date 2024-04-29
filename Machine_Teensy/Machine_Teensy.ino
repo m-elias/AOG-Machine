@@ -13,7 +13,7 @@ const uint8_t LONGER_UDP_PACKET_SIZE = 40; // currently the longest PGN is 39 (S
 uint8_t pgnData[LONGER_UDP_PACKET_SIZE];   // Buffer For Receiving UDP Data
 
 // IP & MAC address of this module of this module
-byte myip[4] = { 192, 168, 5, 123};                 // 123 is machine IP
+byte myip[4] = { 192, 168, 5, 123};                 // 123 is the designated "machine module" IP
 byte mac[] = {0x00, 0x00, 0x56, 0x00, 0x00, 0x78};
 
 const unsigned int AOG_PGN_PORT = 8888;   // port for receiving UDP data from AOG
