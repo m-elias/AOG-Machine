@@ -486,6 +486,9 @@ public:
     }
     printConfig();
     printPinConfig();
+    #ifdef ESP32
+      EEPROM.commit();            // needed for ESP
+    #endif
     eeLoadedAtStartup = true;
   }
 
@@ -493,6 +496,9 @@ public:
   {
     if (eeAddr < 0) return;
     EEPROM.put(eeAddr + 2, config);
+    #ifdef ESP32
+      EEPROM.commit();            // needed for ESP
+    #endif
     if (debugLevel > 1) Serial.print("\r\nNew Machine config saved to EEPROM");
   }
 
