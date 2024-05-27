@@ -7,15 +7,16 @@
 An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/releases) Machine/Section control related code into an Arduino class/library for UDP communications.
 
 ### Source & Examples
-See the machine.h file in the two example sketches for Teensy 4.1 (Eth) and Nano (enc28j60) implementation.
+See the machine.h file in the two example sketches for Teensy 4.1 (Eth), Nano (enc28j60) & ESP32 (Wifi) implementation.
+- note the ESP32 example has a new re-worked machine class with callback functions
+- eventually the Teensy/Nano examples will follow suit
 
 The Teensy example includes code for using PCA9555 (I2C expander) outputs.
 
 ### To do:
-- ESP32 example
-- init() function for section only control
-- customizable number of PCA9555 outputs
-- Add section "switch" control PGN
+- Consolidate Teensy/Nano examples to use same (newer) ESP32 machine class
+- Add section "switch" control PGN?
+  - maybe in it's own class
 
 ### AgOpenGPS Machine Configuration
 Use the Machine settings in AgOpenGPS to set the machine config settings.
