@@ -7,7 +7,7 @@ void updateSectionOutputs()
 
 // callback function triggered by Machine class to update "machine" outputs
 // this updates the Machine Module Pin Configuration outputs
-// sections 1-16, Hyd Up/Down, Tramline Right/Left, Geo Stop
+// - sections 1-16, Hyd Up/Down, Tramline Right/Left, Geo Stop
 void updateMachineOutputs()
 {
   Serial.print("\r\nMachine Outputs update! ");

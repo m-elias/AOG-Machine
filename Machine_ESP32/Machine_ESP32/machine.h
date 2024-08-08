@@ -7,8 +7,6 @@
   This class only takes care of the AgOpenGPS "Machine" logic & PGN parsing
     - uses a callback function for the hardware interfacing (ie Arduino digitalWrite or PCA9555 cmds)
     - currently only properly supports 24 output pins
-      - to use all 64 would probably need a mode to only do sections and not other functions like hyd lift, trams, geo stop, etc
-    - 
 
 
   To to:
