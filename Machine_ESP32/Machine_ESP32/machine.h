@@ -47,6 +47,8 @@ public:
   struct States {
     uint8_t uTurn;                // not implemented, just read from PGN
     uint8_t gpsSpeed;             // *0.1 to get real speed in km/hr
+    uint8_t leftSpeed;            // left side speed, for turning, m/s * 10
+    uint8_t rightSpeed;           // right
     uint8_t hydLift;              // 0 - off, 1 - down, 2 - up
     uint8_t tramline;             // bit0: right, bit1: left
     uint8_t geoStop;              // 0 - inside boundary, 1 - outside boundary
@@ -364,14 +366,23 @@ public:
       if (debugLevel > 3) Serial.println();
 
       for (uint8_t j = 0; j < 8; j++) {
-        if (debugLevel > 3){ Serial.print(j); Serial.print(":"); }
         states.sections.groupsofeight[j] = pgnData[5 + j];    // read all 8 bytes of section state data
         if (debugLevel > 3) {
+          Serial.print(j); Serial.print(":");
           printBinaryByteLSB(states.sections.groupsofeight[j], 8);
           Serial.print(" ");
         }
       }
-      if (debugLevel > 3) Serial.println(); 
+
+      states.leftSpeed = pgnData[13];
+      states.rightSpeed = pgnData[14];
+
+      if (debugLevel > 3) {
+        Serial.println();
+        Serial.print("Left speed: "); Serial.print(states.leftSpeed);
+        Serial.print(" Right speed: "); Serial.print(states.rightSpeed);
+        Serial.println(); 
+      }
 
       updateStates();
       if (prevSections != states.sections.allSections) {
