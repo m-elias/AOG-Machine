@@ -10,7 +10,7 @@
     - 
 
 
-  To to:
+  To do:
     - add section switch code, maybe in it's own class?
     - add GPS speed output options/code
     - maybe split up machine functions and sections into seperate classes or seperate output groups

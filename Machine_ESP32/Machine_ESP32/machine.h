@@ -9,7 +9,7 @@
     - currently only properly supports 24 output pins
 
 
-  To to:
+  To do:
     - add section switch code, maybe in it's own class?
     - add GPS speed output options/code
     - maybe split up machine functions and sections into seperate classes or seperate output groups
@@ -110,7 +110,7 @@ private:
   bool triggerOutputUpdate;
 
   elapsedMillis watchdogTimer;
-  const uint8_t LOOP_TIME = 200;                  // 5hz
+  //const uint8_t LOOP_TIME = 200;                  // 5hz
   const uint16_t watchdogTimeoutPeriod = 5000;    // ms, originally was 20 update cycles (4 secs)
   const uint16_t watchdogAlertPeriod = 2000;      // ms, how long after UDP comms lost to alert to possible comms issues
   bool watchdogAlertTriggered;
@@ -497,6 +497,38 @@ public:
     return false;   // no matching PGN, return false for further PGN processing in main/host code
   }
 
+  void printPgnAnnoucement(uint8_t* _data, uint8_t _len, char* _pgnName)
+  {
+    // One line PGN data display
+    Serial.print("\r\n0x"); Serial.print(_data[3], HEX);
+    Serial.print("("); Serial.print(_data[3]); Serial.print(")-");
+    Serial.print(_pgnName);
+    for (uint8_t i = strlen(_pgnName); i < 20; i++) Serial.print(" ");  // to align PGN data dump with all PGNs
+    Serial.printf(" %2i Data>", _len);
+    //Serial.print(millis());
+
+    //Serial.print(" Data: ");
+    for (byte i = 4; i < _len - 1; i++) {      // -1 skips printing CRC
+      Serial.printf("%3i", _data[i]); Serial.print(" ");    // aligns all data bytes using empty/leading whitespace
+      //Serial.print(pgnData[i]); Serial.print(" ");          // no data byte alignment
+    }
+    
+    // Two line PGN data display
+    /*Serial.print("\r\n0x"); Serial.print(_data[3], HEX);
+    Serial.print(" ("); Serial.print(_data[3]); Serial.print(") - ");
+    Serial.print(_pgnName); Serial.print(", "); Serial.print(_len); Serial.print(" bytes ");
+    Serial.print(millis());
+
+    Serial.print("\r\nData: ");
+    for (byte i = 0; i < _len; i++) {
+      Serial.print(_data[i]); Serial.print(" ");
+    }
+    Serial.print(" Length: ");
+    Serial.print(_len);
+
+    Serial.println();*/
+  }
+
 
   // ***************************************************************************************************************************************************
   // ****************************************************** OTHER FUNCTIONS*****************************************************************************
@@ -540,16 +572,16 @@ public:
     if (debugLevel > 1) Serial.print("\r\nNew Machine config saved to EEPROM");
   }
 
-  void setSectionOutputsHandler(ExternalHandler extHandler) {
-    SectionOutputs_Handler = extHandler;
+  void setSectionOutputsHandler(ExternalHandler _extHandler) {
+    SectionOutputs_Handler = _extHandler;
   }
 
-  void setMachineOutputsHandler(ExternalHandler extHandler) {
-    MachineOutputs_Handler = extHandler;
+  void setMachineOutputsHandler(ExternalHandler _extHandler) {
+    MachineOutputs_Handler = _extHandler;
   }
 
-  void setUdpReplyHandler(ReplyHandler extHandler) {
-    UDPReplyHandler = extHandler;
+  void setUdpReplyHandler(ReplyHandler _rplyHandler) {
+    UDPReplyHandler = _rplyHandler;
   }
 
   void printConfig()
@@ -575,38 +607,6 @@ public:
       Serial.print(" ");
       Serial.print(functionNames[config.pinFunction[i - 1]]);
     }
-  }
-
-  void printPgnAnnoucement(uint8_t* _data, uint8_t _len, char* _pgnName)
-  {
-    // One line PGN data display
-    Serial.print("\r\n0x"); Serial.print(_data[3], HEX);
-    Serial.print("("); Serial.print(_data[3]); Serial.print(")-");
-    Serial.print(_pgnName);
-    for (uint8_t i = strlen(_pgnName); i < 20; i++) Serial.print(" ");  // to align PGN data dump with all PGNs
-    Serial.printf(" %2i Data>", _len);
-    //Serial.print(millis());
-
-    //Serial.print(" Data: ");
-    for (byte i = 4; i < _len - 1; i++) {      // -1 skips printing CRC
-      Serial.printf("%3i", _data[i]); Serial.print(" ");    // aligns all data bytes using empty/leading whitespace
-      //Serial.print(pgnData[i]); Serial.print(" ");          // no data byte alignment
-    }
-    
-    // Two line PGN data display
-    /*Serial.print("\r\n0x"); Serial.print(_data[3], HEX);
-    Serial.print(" ("); Serial.print(_data[3]); Serial.print(") - ");
-    Serial.print(_pgnName); Serial.print(", "); Serial.print(_len); Serial.print(" bytes ");
-    Serial.print(millis());
-
-    Serial.print("\r\nData: ");
-    for (byte i = 0; i < _len; i++) {
-      Serial.print(_data[i]); Serial.print(" ");
-    }
-    Serial.print(" Length: ");
-    Serial.print(_len);
-
-    Serial.println();*/
   }
 
   void printBinaryByteLSB(uint8_t var, uint8_t len) {
