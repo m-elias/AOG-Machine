@@ -7,7 +7,7 @@
 An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/releases) Machine/Section control related code into an Arduino class/library for UDP communications.
 
 ### Source & Examples
-See the machine.h file in the two example sketches for Teensy 4.1 (Eth), Nano (enc28j60) & ESP32 (Wifi) implementation.
+See the machine.h file in the example sketches for Teensy 4.1 (Eth), Nano (enc28j60) & ESP32 (Wifi) implementation.
 - note the ESP32 example has a new re-worked machine class with callback functions
 - eventually the Teensy/Nano examples will follow suit
 
