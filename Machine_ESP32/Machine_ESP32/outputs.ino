@@ -20,7 +20,7 @@ void updateMachineOutputs()
     Serial.print(" ");
     Serial.print(machine.functionNames[machine.config.pinFunction[i - 1]]);*/
 
-    digitalWrite(machineOutputPins[i], machine.state.functions[machine.config.pinFunction[i]] == machine.config.isPinActiveHigh); // ==, XOR
+    digitalWrite(machineOutputPins[i], machine.state.functions[machine.config.pinFunction[i]] == machine.config.isPinActiveHigh); // == does a XOR bit operation
   }
 }
 
