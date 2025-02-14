@@ -1,11 +1,12 @@
-#include "IPAddress.h"
-#include <stdint.h>
 /*
   My attempt at putting the Machine/Section control code all into a class/library
     by Matt Elias Feb 2024
 
   This class only takes care of the AgOpenGPS "Machine" logic & PGN parsing
-    - uses a callback function for the hardware interfacing (ie Arduino digitalWrite or PCA9555 cmds)
+    - uses a callback function for the hardware interfacing (ie Arduino digitalWrite or PCA9685 I2C cmds)
+      - SectionOutputs_Handler() callback function is called by 0xE5 (229) "64 Section Data" PGN updates
+      - MachineOutputs_Handler() is called by updateMachineStates()
+        - which is also called by the 64 Section PGN because updateMachineStates() uses the section 1-16 data in the 64 Section PGN
     - currently only properly supports 24 output pins
 
 
@@ -20,35 +21,37 @@
 
 #include <EEPROM.h>
 #include "elapsedMillis.h"
+#include "IPAddress.h"
+#include <stdint.h>
 
 class MACHINE
 {
 
 public:
 
+  // 0 - debug prints OFF
+  // 1 - alerts/errors only
+  // 2 - init info
+  // 3 - config PGN announcements (only sent when changing settings in AOG)
+  // 4 - all PGN announcements
+  // 5 - all PGN data
   uint8_t debugLevel = 3;
-    // 0 - debug prints OFF
-    // 1 - alerts/errors only
-    // 2 - init info
-    // 3 - config PGN announcements (only sent when changing settings in AOG)
-    // 4 - all PGN announcements
-    // 5 - all PGN data
 
-  uint8_t debugMask = B0000000;     // not yet implemented
-    // bit 0: alerts/errors
-    // bit 1: init info
-    // bit 2: 
-    // bit 3: 64 Sections PGN
-    // bit 4: Section Dimensions PGN
-    // bit 5: Pin Config PGN
-    // bit 6: Machine Config PGN
-    // bit 7: Machine Data PGN
+  // bit 0: alerts/errors
+  // bit 1: init info
+  // bit 2: 
+  // bit 3: 64 Sections PGN
+  // bit 4: Section Dimensions PGN
+  // bit 5: Pin Config PGN
+  // bit 6: Machine Config PGN
+  // bit 7: Machine Data PGN
+  //uint8_t debugMask = B0000000;     // not yet implemented
 
   struct States {
     uint8_t uTurn;                // not implemented, just read from PGN
     uint8_t gpsSpeed;             // *0.1 to get real speed in km/hr
     uint8_t leftSpeed;            // left side speed, for turning, m/s * 10
-    uint8_t rightSpeed;           // right
+    uint8_t rightSpeed;           // right side speed
     uint8_t hydLift;              // 0 - off, 1 - down, 2 - up
     uint8_t tramline;             // bit0: right, bit1: left
     uint8_t geoStop;              // 0 - inside boundary, 1 - outside boundary
@@ -56,7 +59,7 @@ public:
     uint8_t sec9to16;             // section 9 to 16 from Machine Data PGN
 
     // read value from Machine Data and set 1 or zero according to list, 21 different function types
-    bool functions[1 + 21] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };   // 0 is not used
+    bool functions[1 + 21] = { 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };   // index 0 is not used
     /* function numbers as below
     1-16   Section 1-16
     17,18  Hyd Up, Hyd Down,
@@ -76,12 +79,12 @@ public:
     uint8_t hydLiftEnable = false;
     uint8_t isPinActiveHigh = 0;          // if zero, active low (default)
   
-    uint8_t user1;                        //user defined values set in machine tab
+    uint8_t user1;                        //user defined values set in AOG machine tab
     uint8_t user2;
     uint8_t user3;
     uint8_t user4;
 
-    uint8_t pinFunction[24] = { 1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+    uint8_t pinFunction[1 + 24] = { 0, 1,2,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
   };
   /* function numbers as below, assigned to pinFunction[], the default above has pin 1-3 as section 1-3
   1-16   Section 1-16
@@ -105,7 +108,6 @@ private:
   int16_t eeAddr = -1;                            // -1 defaults to no EEPROM saving/loading
   #define EE_IDENT 11                             // change to force EE to reset to defaults
   //bool eeLoadedAtStartup;
-  bool isInit;
 
   //uint8_t numOutputPins = 0;                      // 0 defaults to no direct Arduino pin control
   //const uint8_t maxOutputPins = 24;               // 24 pins can be configured in AoG (Machine Pin Config PGN), 64 sections currently the max supported by AoG
@@ -126,12 +128,14 @@ private:
 
 public:
 
-  const States& state = states;
+  //const States& state = states;
+  bool isInit;
 
   MACHINE(void) {}
   ~MACHINE(void) {}
 
-  void init(int16_t _eeAddr = -1, const uint8_t _eeSize = 33) // 33 bytes of EEPROM used
+  // 33 bytes of EEPROM used
+  void init(int16_t _eeAddr = -1, const uint8_t _eeSize = 33)
   {
     eeAddr = _eeAddr;
     /*#ifdef ESP32
@@ -148,19 +152,20 @@ public:
   {
     if (watchdogTimer > watchdogTimeoutPeriod)    // watchdogTimer reset with Machine Data PGN, should be 64 Section instead or both?
     {
-      if (debugLevel > 0) Serial.print("\r\n*** UDP Machine Comms lost for 5s, setting all outputs OFF! ***");
-      for (uint8_t i = 0; i < 21; i++) {
-        states.functions[1 + i] = 0;            // set all functions OFF
+      if (debugLevel > 0) Serial.print((String)"\r\n*** UDP Machine Comms lost for " + watchdogTimeoutPeriod / 1000 + "s, setting all outputs OFF! ***");
+      for (uint8_t i = 1; i <= 21; i++) {
+        states.functions[i] = 0;            // set all functions OFF
       }
-      states.sections.allSections = 0;      // set all functions OFF
+      states.sections.allSections = 0;      // set all sections OFF
 
-      updateOutputPins();
+      if (MachineOutputs_Handler != NULL) MachineOutputs_Handler();     // callback function to update machine outputs (incl sections 1-16)
+      if (SectionOutputs_Handler != NULL) SectionOutputs_Handler();     // callback function to update section only outputs
       watchdogTimer = 0;            // only output timed out OFF every watchdogTimeoutPeriod
     }
     else if (watchdogTimer > watchdogAlertPeriod)
     {
       if (debugLevel > 0 && !watchdogAlertTriggered) {
-        Serial.print("\r\n** UDP Machine Comms lost for 2s **");
+        Serial.print("\r\n** UDP Machine Comms lost for 2s **\r\n");
         watchdogAlertTriggered = true;
       }
     }
@@ -168,14 +173,21 @@ public:
 
   // update triggered by PGN from AOG for quicker section response, watchdogCheck() looks for comms timeout
   // updating outputs from PGN should be slightly quicker response then waiting for old update loop to trigger, at times the delay was almost 200ms
-  void updateStates()
+  void updateMachineStates()
   {
+    //Serial.print("\r\nUpdating Machine States");
+    if (debugLevel > 0 && watchdogTimer > watchdogAlertPeriod) {
+      Serial.print("\r\n*** UDP Machine Comms resumed ***");
+    }
+    watchdogAlertTriggered = false;
+    watchdogTimer = 0;   //reset watchdog timer
+
     static uint8_t lastTrigger;          // "static" means this var is accessible only to this function but its value persists (it's not destroyed)
     static uint8_t raiseTimer = 0;
     static uint8_t lowerTimer = 0;
     bool isRaise, isLower;
 
-    bool prevFunctions[sizeof(states.functions)];// = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+    bool prevFunctions[sizeof(states.functions)];
     memcpy(prevFunctions, states.functions, sizeof(states.functions));
 
     if (config.hydLiftEnable)       // hydraulic lift
@@ -235,18 +247,11 @@ public:
     states.functions[21] = states.geoStop;
 
     if (triggerOutputUpdate || memcmp(states.functions, prevFunctions, sizeof(states.functions))) {
-      MachineOutputs_Handler();     // callback function to update machine outputs
+      if (MachineOutputs_Handler != NULL) MachineOutputs_Handler();  // callback function to update machine outputs (incl sections 1-16)
       triggerOutputUpdate = false;
     }
 
-    if (debugLevel > 0 && watchdogTimer > watchdogAlertPeriod) {
-      Serial.print("\r\n*** UDP Machine Comms resumed ***");
-    }
-    watchdogAlertTriggered = false;
-    watchdogTimer = 0;   //reset watchdog timer
-
     // *** Sending PGN_237 isn't necessary, doesn't do anything?
-
     // generic "from machine" PGN template
     //uint8_t PGN_237[14] = { 0x80, 0x81, 0x7B, 237, 8, 1, 2, 3, 4, 0, 0, 0, 0, 0xCC };
 
@@ -265,41 +270,12 @@ public:
   }
 
 
-  void updateOutputPins()
-  {
-/*    if (numOutputPins > 0)
-    {
-      //if (debugLevel > 3) Serial.print("\r\nPin outputs ");
-      for (uint8_t i = 0; i < numOutputPins; i++) {
-        digitalWrite(outputPinNumbers[i], states.functions[config.pinFunction[i]] == config.isPinActiveHigh);                     // ==, XOR
-        //if (debugLevel > 3) Serial.print(i); Serial.print(":"); Serial.print(states.functions[config.pinFunction[i]] == config.isPinActiveHigh); Serial.print(" ");
-      }
-    }*/
-
-    /*Serial.println();
-    for (byte i = 0; i < 24; i++){
-      Serial.printf("%2i ", config.pinFunction[i]);
-    }
-    Serial.println();
-    for (byte i = 0; i < 24; i++){
-      Serial.printf("%2i ", (config.pinFunction[i] > 0 ? states.functions[config.pinFunction[i]] : -1));
-    }
-    Serial.println();
-    for (byte i = 0; i < 22; i++){
-      Serial.printf("%2i ", states.functions[i]);
-    }*/
-    //Serial << "\r\noutput update delay: " << updateDelayTimer;
-    //if (config.pinFunction[0]) digitalWrite(4, states.functions[config.pinFunction[0]]);
-    triggerOutputUpdate = false;
-  }
-
-
   // ***************************************************************************************************************************************************
   // ****************************************************** PGN PARSING ********************************************************************************
   // ***************************************************************************************************************************************************
 
   
-  bool parsePGN(uint8_t *pgnData, uint8_t len, IPAddress sourceIP)
+  bool parsePGN(uint8_t *pgnData, uint8_t len, IPAddress sourceIP, IPAddress myIP)
   {
     if (len < 5) return false;
     // should check CRC here too???
@@ -310,15 +286,17 @@ public:
     if (pgnData[3] == 200 && len == 9)  // 0xC8 (200) - Hello from AgIO
     {
       if (debugLevel > 3) printPgnAnnoucement(pgnData, len, (char*)"Hello from AgIO");
-      //if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      //if (debugLevel > 3) Serial.print("Hello from AgIO");
 
       if (isInit) {
-          uint8_t helloFromMachine[] = { 0x80, 0x81, 123, 123, 5, 0, 0, 0, 0, 0, 71 };
-          helloFromMachine[5] = states.sections.groupsofeight[0];
-          helloFromMachine[6] = states.sections.groupsofeight[1];
+        uint8_t helloFromMachine[] = { 0x80, 0x81, 123, 123, 5, 0, 0, 0, 0, 0, 71 };
+        helloFromMachine[5] = states.sections.groupsofeight[0];
+        helloFromMachine[6] = states.sections.groupsofeight[1];
+        if (UDPReplyHandler != NULL) {
           UDPReplyHandler(helloFromMachine, sizeof(helloFromMachine), sourceIP);
           if (debugLevel > 3) printPgnAnnoucement(helloFromMachine, sizeof(helloFromMachine), (char*)"Machine Reply");
+        }
+      } else {
+        if (debugLevel > 3) Serial.print("\r\nMachine not initialized");
       }
       if (debugLevel > 3) Serial.println();
 
@@ -331,10 +309,9 @@ public:
     {
       if (debugLevel > 2) printPgnAnnoucement(pgnData, len, (char*)"Scan Request");
 
-      if (pgnData[4] == 3 && pgnData[5] == 202 && pgnData[6] == 202) {
-        IPAddress destIP = { 255, 255, 255, 255 };
-
-        if (isInit) {
+      if (isInit) {
+        if (pgnData[4] == 3 && pgnData[5] == 202 && pgnData[6] == 202) {
+          IPAddress destIP = { 255, 255, 255, 255 };
           uint8_t scanReplyMachine[] = { 128, 129, 123, 203, 7,
                                   myIP[0], myIP[1], myIP[2], myIP[3],
                                   sourceIP[0], sourceIP[1], sourceIP[2], 23 };
@@ -344,8 +321,10 @@ public:
           }
           scanReplyMachine[sizeof(scanReplyMachine) - 1] = CK_A;*/
 
-          UDPReplyHandler(scanReplyMachine, sizeof(scanReplyMachine), destIP);
-          if (debugLevel > 2) printPgnAnnoucement(scanReplyMachine, sizeof(scanReplyMachine), (char*)"Machine Reply");
+          if (UDPReplyHandler != NULL) {
+            UDPReplyHandler(scanReplyMachine, sizeof(scanReplyMachine), destIP);
+            if (debugLevel > 2) printPgnAnnoucement(scanReplyMachine, sizeof(scanReplyMachine), (char*)"Machine Reply");
+          }
         }
       }
 
@@ -359,8 +338,6 @@ public:
     if (pgnData[3] == 229 && len == 16)               // 0xE5 (229) - 64 Section Data, len: 16
     {                                                      
       if (debugLevel > 3) printPgnAnnoucement(pgnData, len, (char*)"64 Section Data");
-      //if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      //if (debugLevel > 3) Serial.print("64 Section Data");
 
       uint64_t prevSections = states.sections.allSections;
       if (debugLevel > 3) Serial.println();
@@ -384,9 +361,9 @@ public:
         Serial.println(); 
       }
 
-      updateStates();
+      updateMachineStates();
       if (prevSections != states.sections.allSections) {
-        SectionOutputs_Handler();
+        if (SectionOutputs_Handler != NULL) SectionOutputs_Handler();     // callback function to update section only outputs
       }
 
       return true;
@@ -397,8 +374,6 @@ public:
     if (pgnData[3] == 235 && len == 39)               // 0xEB (235) - Section Dimensions, len: 39
     {
       if (debugLevel > 2) printPgnAnnoucement(pgnData, len, (char*)"Section Dims");
-      //if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      //if (debugLevel > 2) Serial.print("Section Dims");
       
       // parse section dims here
       
@@ -411,13 +386,11 @@ public:
     if (pgnData[3] == 236 && len == 30)               // 0xEC (236) - Machine Pin Config, len: 30
     {
       if (debugLevel > 2) printPgnAnnoucement(pgnData, len, (char*)"Machine Pin Config");
-      //if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      //if (debugLevel > 2) Serial.print("Machine Pin Config");
 
       uint8_t tempFunction[sizeof(config.pinFunction)];
       memcpy(tempFunction, config.pinFunction, sizeof(config.pinFunction));   // make a copy to compare after the update
       for (uint8_t i = 5; i < len - 1; i++) {
-        config.pinFunction[i - 5] = pgnData[i];     // update each pin's function from PGN (from AOG machine pin config screen)
+        config.pinFunction[i - 4] = pgnData[i];     // update each pin's function from PGN (from AOG machine pin config screen)
       }
       if (tempFunction != config.pinFunction) {        // compare, if different do stuff
         if (debugLevel > 2) printPinConfig();
@@ -434,8 +407,6 @@ public:
     if (pgnData[3] == 238 && len == 14)                // 0xEE (238) - Machine Config, len: 14
     {
       if (debugLevel > 2) printPgnAnnoucement(pgnData, len, (char*)"Machine Config");
-      if (debugLevel > 2) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      if (debugLevel > 2) Serial.print("Machine Config");
 
       config.raiseTime = pgnData[5];
       config.lowerTime = pgnData[6];
@@ -467,8 +438,6 @@ public:
     if (pgnData[3] == 239 && len == 14)                // 0xEF (239) - Machine Data, len: 14
     {
       if (debugLevel > 3) printPgnAnnoucement(pgnData, len, (char*)"Machine Data");
-      //if (debugLevel > 3) { Serial.print("\r\n0x"); Serial.print(pgnData[3], HEX); Serial.print(" ("); Serial.print(pgnData[3]); Serial.print(") - "); }
-      //if (debugLevel > 3) Serial.print("Machine Data");
       
       states.uTurn = pgnData[5];
 
@@ -498,7 +467,7 @@ public:
         Serial.print(" 1:"); printBinaryByteLSB(states.sec9to16, 8);
       }
 
-      //updateStates();   // 64 Section PGN comes after Machine Data, so states/outputs are updated there
+      //updateMachineStates();   // 64 Section PGN comes after Machine Data, so states/outputs are updated there
       if (debugLevel > 3) Serial.println();
       return true;
     } // 0xEF (239) - Machine Data
@@ -609,14 +578,15 @@ public:
 
   void printPinConfig()
   {
-    for (uint8_t i = 1; i <= uint8_t(sizeof(config.pinFunction)); i++) {
+    for (uint8_t i = 1; i < uint8_t(sizeof(config.pinFunction)); i++) {
+      //Serial.printf("\r\n- Pin %02i: %02i %s", i, config.pinFunction[i - 1], functionNames[config.pinFunction[i]]);
       Serial.print("\r\n- Pin ");
       Serial.print((i < 10 ? " " : ""));
       Serial.print(i); Serial.print(": ");
-      Serial.print((config.pinFunction[i - 1] < 10 ? " " : ""));
-      Serial.print(config.pinFunction[i - 1]);
+      Serial.print((config.pinFunction[i] < 10 ? " " : ""));
+      Serial.print(config.pinFunction[i]);
       Serial.print(" ");
-      Serial.print(functionNames[config.pinFunction[i - 1]]);
+      Serial.print(functionNames[config.pinFunction[i]]);
     }
   }
 

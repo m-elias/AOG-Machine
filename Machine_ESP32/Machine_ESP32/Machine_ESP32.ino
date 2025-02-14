@@ -21,13 +21,9 @@
   IPAddress myIP = { 192, 168, 137, 1 }; // IP of ESP32 AccessPoint, default: 192.168.137.1 to match Windows Hotspot scheme
 
 #elif defined(STN)
-  const char* ssid = "bins";
-  const char* password = "binsWifiPW";
   IPAddress myIP;                       // assigned by DHCP in stn/client mode
-  //const char* ssid = "other";
-  //const char* password = "PW";
-  //const char* ssid = "AgOpenGPS_net";
-  //const char* password = "";
+  const char* ssid = "AgOpenGPS_net";
+  const char* password = "";
   //IPAddress myIP = { 192, 168, 137, 79 }; // IP of ESP32 stn/client, default: 192.168.137.79 to match Windows Hotspot scheme
 
 #endif
@@ -40,15 +36,21 @@ IPAddress udpDestIP;              // assigned in wifi.ino, myIP.255
 
 #include "machine.h"
 MACHINE machine;
-MACHINE::States machineStates;   
+//MACHINE::States machineStates;   
 
+// For XIAO ESP32-C3/S3
+const byte numMachineOutputs = 8;
+byte machineOutputPins[numMachineOutputs] = { D0, D1, D2, D3, D4, D5, D8, D9 };
+
+// For large/generic ESP32
+//const byte numMachineOutputs = 15;
+//byte machineOutputPins[numMachineOutputs] = { 12, 13, 5, 23, 19, 18, 21, 22, 14, 27, 16, 17, 25, 26, 4 };
+// or
 //const byte numMachineOutputs = 8;
 //byte machineOutputPins[numMachineOutputs] = { 12, 13, 5, 23, 19, 18, 21, 22 };
-const byte numMachineOutputs = 15;
-byte machineOutputPins[numMachineOutputs] = { 12, 13, 5, 23, 19, 18, 21, 22, 14, 27, 16, 17, 25, 26, 4 };
 
 void setup() {
-  delay(250);           // for ESP, to settle boot up power surges
+  delay(500);           // for ESP, to settle boot up power surges
   Serial.begin(115200);
   Serial.print("\r\n*******************************************\r\nESP32 Async UDP Machine class demo\r\n");
 
@@ -57,11 +59,11 @@ void setup() {
   EEPROM.begin(150);    // enough for all needed EEPROM storage (only needed for ESP)
 
   machine.init(100);    // 100 is address for machine EEPROM storage (uses 33 bytes)
-  machine.setSectionOutputsHandler(updateSectionOutputs);
+  //machine.setSectionOutputsHandler(updateSectionOutputs);
   machine.setMachineOutputsHandler(updateMachineOutputs);
   machine.setUdpReplyHandler(pgnReplies);
-
   setOutputPinModes();
+
   Serial.print("\r\n\nSetup complete\r\n*******************************************\r\n");
 }
 
@@ -78,7 +80,12 @@ void loop() {
 
 
 void parseSerial() {
-  if (Serial.read() == 'm' && Serial.available()) {
-    machine.debugLevel = Serial.read() - '0';
+  if (Serial.read() == 'm'){
+    if (Serial.available()) {
+      if (Serial.peek() >= '0' && Serial.peek() <= '5') {
+        machine.debugLevel = Serial.read() - '0';   // -0 to convert ASCII char value to numerical ('0' is ASCII #48)
+      }
+    }
+    Serial.print("\r\nMachine debug level: "); Serial.print(machine.debugLevel);
   }
 }
