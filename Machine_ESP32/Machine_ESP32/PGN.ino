@@ -1,7 +1,7 @@
 /*
 
   Parse PGNs sent from AgIO - sent to port 8888
-  a lot of this code taken from old AIO I2C firmware
+  a lot of this code taken from v4.x AiO I2C firmware
 
 */
 
@@ -22,11 +22,27 @@ void checkForPGNs(AsyncUDPPacket packet)
     // 0xEC (236) - Machine Pin Config
     // 0xEE (238) - Machine Config
     // 0xEF (239) - Machine Data
-    if (machine.parsePGN(packet.data(), packet.length(), packet.remoteIP()))    // look for Machine PGNs, return TRUE if machine specific PGN was found
+    if (machine.parsePGN(packet.data(), packet.length(), packet.remoteIP(), myIP))    // look for Machine PGNs, return TRUE if machine specific PGN was found
     {
       return;   // abort further PGN processing if machine specific PGN as received/parsed
     }
   #endif
+
+
+
+  if (packet.data()[3] == 100 && packet.length() == 30)         // 0x64 (100) - Corrected Position
+  {
+    //printPgnAnnoucement(packet, (char*)"Corrected Position");
+    return;                    // no other processing needed
+  }
+
+
+
+  if (packet.data()[3] == 200 && packet.length() == 9)          // 0xC8 (200) - Hello from AgIO
+  {
+    printPgnAnnoucement(packet, (char*)"Hello from AgIO");
+    return;
+  } // 0xC8 (200) - Hello from AgIO
 
 
 
@@ -54,7 +70,7 @@ void checkForPGNs(AsyncUDPPacket packet)
 
   if (packet.data()[3] == 202 && packet.length() == 9)          // 0xCA (202) - Scan Request
   {
-    //printPgnAnnoucement(packet, (char*)"Scan Request");
+    printPgnAnnoucement(packet, (char*)"Scan Request");
     Serial.print("\r\nAgIO   "); Serial.print(packet.remoteIP());
     Serial.print(":"); Serial.print(packet.remotePort());
     Serial.print("\r\nModule "); Serial.print(myIP);   // packet.localIP() returns the dest IP of 255.255.255.255.255 for Scan Request
@@ -64,25 +80,9 @@ void checkForPGNs(AsyncUDPPacket packet)
 
 
 
-  if (packet.data()[3] == 100 && packet.length() == 22)         // 0x64 (100) - Corrected Position
-  {
-    //printPgnAnnoucement(packet, (char*)"Corrected Position");
-    return;                    // no other processing needed
-  }
-
-
-
-  if (packet.data()[3] == 200 && packet.length() == 9)          // 0xC8 (200) - Hello from AgIO
-  {
-    //printPgnAnnoucement(packet, (char*)"Hello from AgIO");
-    return;
-  } // 0xC8 (200) - Hello from AgIO
-
-
-
   if (packet.data()[3] == 251 && packet.length() == 14)         // 0xFB (251) - SteerConfig
   {
-    printPgnAnnoucement(packet, (char*)"Steer Config");
+    //printPgnAnnoucement(packet, (char*)"Steer Config");
     return; // no other processing needed
   }  // 0xFB (251) - SteerConfig
 
@@ -90,7 +90,7 @@ void checkForPGNs(AsyncUDPPacket packet)
 
   if (packet.data()[3] == 252 && packet.length() == 14)         // 0xFC (252) - Steer Settings
   {
-    printPgnAnnoucement(packet, (char*)"Steer Settings");
+    //printPgnAnnoucement(packet, (char*)"Steer Settings");
     return; // no other processing needed
   }  // 0xFC (252) - Steer Settings
 
