@@ -1,10 +1,11 @@
-![AgOpenGPS](https://github.com/m-elias/AOG-AiO-RVC-100hz/blob/main/media/agopengps%20name%20logo.png)
+![AgOpenGPS](media/agopengps%20name%20logo.png)
 [AOG Download](https://github.com/AgOpenGPS-Official/AgOpenGPS/releases)<br>
 [AOG Forum](https://discourse.agopengps.com/)<br>
 [AOG YouTube](https://youtube.com/@AgOpenGPS)
 
 ## UDP Machine class
-An attempt to put all [AgOpenGPS](https://github.com/farmerbriantee/AgOpenGPS/releases) Machine/Section control related code into an Arduino class/library for UDP communications.
+An attempt to put all [AgOpenGPS](https://github.com/AgOpenGPS-Official/AgOpenGPS) Machine/Section control related code into an Arduino class/library for UDP communications.
+![class structure](media/Machine%20Class%20structure.jpg)
 
 ### Source & Examples
 See the machine.h file in the example sketches for Teensy 4.1 (Eth), Nano (enc28j60) & ESP32 (Wifi) implementation.
@@ -20,7 +21,7 @@ The Teensy example includes code for using PCA9555 (I2C expander) outputs.
 
 ### AgOpenGPS Machine Configuration
 Use the Machine settings in AgOpenGPS to set the machine config settings.
-![machine config](https://github.com/m-elias/AOG-Machine/blob/main/media/aog%20machine%20config.jpg)
+![machine config](media/aog%20machine%20config.jpg)
 
 Use the Pin config settings to set the function for each output pin.
-![pin config](https://github.com/m-elias/AOG-Machine/blob/main/media/aog%20pin%20config.jpg)
+![pin config](media/aog%20pin%20config.jpg)
